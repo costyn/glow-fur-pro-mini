@@ -1,6 +1,6 @@
 #include <FastLED.h>
 
-#define LED_PIN      12   // which pin your pixels are connected to
+#define LED_PIN     12   // which pin your pixels are connected to
 #define NUM_LEDS    89   // how many LEDs you have
 #define BRIGHTNESS 255  // 0-255, higher number is brighter. 
 #define SATURATION 255   // 0-255, 0 is pure white, 255 is fully saturated color
@@ -13,21 +13,27 @@
 #define FADER 242
 #define LOOPSTART 0
 
+#define CSPEED 25
+
 CRGB leds[NUM_LEDS];
 CRGBPalette16 currentPalette;
-//CRGBPalette16 targetPalette( PartyColors_p );
+
 TBlendType    currentBlending;
-int ledMode = 3;
+int ledMode = 0;
 int fadeSpeed = FADER ;
 int fadeAdder = 4 ;
 long loopCounter = LOOPSTART ;
 
-//char bstate1 = 0;
-unsigned long lastButtonChange = 0; // button debounce timer.  Replicate as necessary.
+unsigned long lastButtonChange = 0; // button debounce timer.
+
+CRGBPalette16 palettes[] = { RainbowColors_p, RainbowStripeColors_p, OceanColors_p, HeatColors_p, PartyColors_p, CloudColors_p, ForestColors_p } ;
 
 byte currKeyState = LOW ;
 byte prevKeyState = HIGH;         // button is active low
 
+char *routines[] = { "rb", "rb_stripe", "ocean", "heat", "party", "cloud", "forest", "fire2012", "cylon", "fglitter", "dglitter", "pulse", "pulsestatic", "pulse2", "pulsesuck", "black" };
+
+#define NUMROUTINES (sizeof(routines)/sizeof(char *)) //array size  
 
 void setup() {
   delay( 1000 ); // power-up safety delay
@@ -38,70 +44,55 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), shortKeyPress, RISING);
   //  pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(9600) ;
-  Serial.println( "Starting up") ;
+  Serial.print( "Starting up. Numroutines = ") ;
+  Serial.println( NUMROUTINES ) ;
+  lastButtonChange = millis() ;
 }
 
 void loop() {
-  /*
-    currKeyState = digitalRead(BUTTON_PIN);
-
-    if ((prevKeyState == LOW) && (currKeyState == HIGH)) {
-     shortKeyPress();
-    }
-    prevKeyState = currKeyState;
-
-  */
-  //  digitalWrite(LED_BUILTIN, HIGH);
-  //  delay(10) ;
-  //  digitalWrite(LED_BUILTIN, LOW);
-
   static uint8_t startIndex = 0;
   startIndex = startIndex + 1; /* motion speed */
 
-  if ( ledMode == 0 ) {
-    currentPalette = ForestColors_p;    //Red & Yellow, Fire Colors
+  if ( ledMode >= 0 and ledMode <= 6 ) {
+    currentPalette = palettes[ledMode] ;
     FillLEDsFromPaletteColors( startIndex);
     FastLED.show();
     FastLED.delay(1000 / SPEED);
 
-  } else if ( ledMode == 1 ) {
-    currentPalette = RainbowStripeColors_p;   //Rainbow stripes
-    FillLEDsFromPaletteColors( startIndex);
-    FastLED.show();
-    FastLED.delay(1000 / SPEED);
-
-  } else if ( ledMode == 2 ) {
-    currentPalette = PartyColors_p; //All the colors except the greens, which make people look a bit washed out
-    FillLEDsFromPaletteColors( startIndex);
-    FastLED.show();
-    FastLED.delay(1000 / SPEED);
-
-  } else if ( ledMode == 3 ) {
-    currentPalette = OceanColors_p;    //Red & Yellow, Fire Colors
-    FillLEDsFromPaletteColors( startIndex);
-    FastLED.show();
-    FastLED.delay(1000 / SPEED);
-
-  } else if ( ledMode == 4 ) {
+  } else if ( strcmp(routines[ledMode], "fire2012") == 0 ) {
     Fire2012() ;
     FastLED.show();
     FastLED.delay(1000 / FSPEED);
 
-  } else if ( ledMode == 5 ) {
+  } else if ( strcmp(routines[ledMode], "cylon") == 0 ) {
     fadeSpeed = FADER ;
     cylon() ;
+    FastLED.show();
+    fadeall(fadeSpeed);
+    delay(CSPEED);
 
-  } else if ( ledMode == 6 ) {
+    // Fade glitter
+  } else if ( strcmp(routines[ledMode], "fglitter") == 0 ) {
     fadeSpeed = 250 ;
-    //fill_solid(leds, NUM_LEDS, CRGB::Black);
     fadeall(fadeSpeed);
     addGlitter(90);
     FastLED.show();
     FastLED.delay(2);
 
-  } else if ( ledMode == 7 ) {
-    //    fill_solid(leds, NUM_LEDS, CRGB::Black);
-    //addGlitter(90);
+    //  Disco glitter
+  } else if ( strcmp(routines[ledMode], "dglitter") == 0 ) {
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    addGlitter(90);
+    FastLED.show();
+    FastLED.delay(20);
+
+    // Black - off
+  } else if ( strcmp(routines[ledMode], "black") == 0 ) {
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    FastLED.show();
+    FastLED.delay(500);
+
+  } else if ( strcmp(routines[ledMode], "pulse") == 0 ) {
     loopCounter++ ;
     if ( loopCounter >= NUM_LEDS ) {
       loopCounter = LOOPSTART ;
@@ -112,18 +103,15 @@ void loop() {
     FastLED.show();
     FastLED.delay(20);
 
-  } else if ( ledMode == 8 ) {
+  } else if ( strcmp(routines[ledMode], "pulsestatic") == 0 ) {
     pulse_static() ;
 
-  } else if ( ledMode == 9 ) {
+  } else if ( strcmp(routines[ledMode], "pulse2") == 0 ) {
     pulse2() ;
 
-  } else if ( ledMode == 10 ) {
+    /* Caterpillar walk */
+  } else if ( strcmp(routines[ledMode], "pulsesuck") == 0 ) {
     pulse_suck() ;
-
-  } else if ( ledMode == 11 ) {
-    glowPulse() ;
-
   }
 
 }
@@ -136,17 +124,21 @@ void FillLEDsFromPaletteColors( uint8_t colorIndex) {
   addGlitter(80);
 }
 
+
 void shortKeyPress() {
-  if( millis() - lastButtonChange > 500 ) {
+  if ( millis() - lastButtonChange > 500 ) {
     ledMode++;
     Serial.print("ledMode = ") ;
+    Serial.print( routines[ledMode] ) ;
+    Serial.print( " mode " ) ;
     Serial.println( ledMode ) ;
-    if (ledMode > 10) {
+
+    if (ledMode >= NUMROUTINES ) {
       ledMode = 0;
     }
     lastButtonChange = millis() ;
   } else {
-     Serial.println( "Too short an interval" ) ;  
+    Serial.println( "Too short an interval" ) ;
   }
 }
 
@@ -167,7 +159,6 @@ void addRGlitter( fract8 chanceOfGlitter)
 
 #define STARTHUE 0
 #define ENDHUE 255
-#define CSPEED 15
 
 void cylon() {
   static uint8_t hueAdder = 1 ;
@@ -190,12 +181,6 @@ void cylon() {
     ledPos += ledPosAdder ;
   }
 
-  FastLED.show();
-  // now that we've shown the leds, reset the i'th led to black
-  // leds[i] = CRGB::Black;
-  fadeall(fadeSpeed);
-  // Wait a little bit before we loop around and do it again
-  delay(CSPEED);
 }
 
 #define MAX_BRIGHT 255
@@ -260,73 +245,71 @@ void pulse(uint8_t startP, uint8_t endP, uint8_t hue ) {
 void pulse2() {
   int middle ;
   int startP ;
-  int endP ;
+  static int endP ;
   uint8_t hue ;
   int brightness;
   int bAdder ;
   bool flowDir ;
 
-  while ( ledMode == 9  ) {
-    fill_solid(leds, NUM_LEDS, CRGB::Black);
-    FastLED.delay(random16(200, 2000)) ;
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  FastLED.delay(random16(200, 2000)) ;
 
-    hue = random8(0, 60) ;
-    brightness = 1 ;
-    bAdder = 15 ;
-    flowDir = random8(2) ;
+  hue = random8(0, 60) ;
+  brightness = 1 ;
+  bAdder = 15 ;
+  flowDir = random8(2) ;
 
+  if ( flowDir ) {
+    endP = random8(20, 89);
+  } else {
+    startP = random8(1, 70);
+  }
+
+  while ( brightness > 0 ) {
     if ( flowDir ) {
-      endP = random8(20, 89);
+      endP-- ;
+      startP = endP - 20 ;
     } else {
-      startP = random8(1, 70);
+      startP++ ;
+      endP = startP + 20 ;
     }
 
-    while ( brightness > 0 ) {
-      if ( flowDir ) {
-        endP-- ;
-        startP = endP - 20 ;
-      } else {
-        startP++ ;
-        endP = startP + 20 ;
-      }
-
-      if ( startP == 89 or endP == 1 ) {
-        break ;
-      }
-
-      middle = endP - round( (endP - startP) / 2 ) ;
-
-      startP = constrain(startP, 0, NUM_LEDS - 1) ;
-      middle = constrain(middle, 0, NUM_LEDS - 1) ;
-      endP = constrain(endP, 0, NUM_LEDS - 1) ;
-
-      brightness += bAdder ;
-      brightness = constrain(brightness, 0, 255) ;
-      if ( brightness >= 250 ) {
-        bAdder = -10 ;
-        //        Serial.print(" bAdder: ") ;
-        //        Serial.print(bAdder) ;
-        //        brightness += bAdder ;
-      }
-      /*
-                  Serial.print(" start: ") ;
-                  Serial.print(startP) ;
-                  Serial.print(" middle: ") ;
-                  Serial.print(middle) ;
-                  Serial.print(" end: ") ;
-                  Serial.print(endP) ;
-                  Serial.print(" bright: ") ;
-                  Serial.print(brightness) ;
-                  Serial.print(" hue: ") ;
-                  Serial.println(hue) ;
-      */
-
-      fill_solid(leds, NUM_LEDS, CRGB::Black);
-      fill_gradient(leds, startP, CHSV(hue, 255, 0), middle, CHSV(hue, 255, brightness), SHORTEST_HUES);
-      fill_gradient(leds, middle, CHSV(hue, 255, brightness), endP, CHSV(hue, 255, 0), SHORTEST_HUES);
-      FastLED.show();
-      FastLED.delay(25);
+    if ( startP == 89 or endP == 1 ) {
+      break ;
     }
+
+    middle = endP - round( (endP - startP) / 2 ) ;
+
+    startP = constrain(startP, 0, NUM_LEDS - 1) ;
+    middle = constrain(middle, 0, NUM_LEDS - 1) ;
+    endP = constrain(endP, 0, NUM_LEDS - 1) ;
+
+    brightness += bAdder ;
+    brightness = constrain(brightness, 0, 255) ;
+    if ( brightness >= 250 ) {
+      bAdder = -10 ;
+      //        Serial.print(" bAdder: ") ;
+      //        Serial.print(bAdder) ;
+      //        brightness += bAdder ;
+    }
+    /*
+                Serial.print(" start: ") ;
+                Serial.print(startP) ;
+                Serial.print(" middle: ") ;
+                Serial.print(middle) ;
+                Serial.print(" end: ") ;
+                Serial.print(endP) ;
+                Serial.print(" bright: ") ;
+                Serial.print(brightness) ;
+                Serial.print(" hue: ") ;
+                Serial.println(hue) ;
+    */
+
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    fill_gradient(leds, startP, CHSV(hue, 255, 0), middle, CHSV(hue, 255, brightness), SHORTEST_HUES);
+    fill_gradient(leds, middle, CHSV(hue, 255, brightness), endP, CHSV(hue, 255, 0), SHORTEST_HUES);
+    FastLED.show();
+    FastLED.delay(25);
   }
 }
 
@@ -339,105 +322,102 @@ void pulse_static() {
   int bAdder ;
   // bool flowDir ;
 
-  while ( ledMode == 8  ) {
-    fill_solid(leds, NUM_LEDS, CRGB::Black);
-    FastLED.delay(random16(200, 700)) ;
+  //  while ( ledMode == 8  ) {
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  FastLED.delay(random16(200, 700)) ;
 
-    hue = random8() ;
-    brightness = MIN_BRIGHT + 1 ;
-    bAdder = 10 ;
-    startP = random8(1, 70);
-    endP = startP + 30 ;
+  hue = random8() ;
+  brightness = MIN_BRIGHT + 1 ;
+  bAdder = 10 ;
+  startP = random8(1, 70);
+  endP = startP + 30 ;
 
 
-    while ( brightness > MIN_BRIGHT ) {
-      if ( bAdder < 0 and startP < endP ) {
-        startP++ ;
-        endP-- ;
-        if ( startP == endP ) {
-          break ;
-        }
+  while ( brightness > MIN_BRIGHT ) {
+    if ( bAdder < 0 and startP < endP ) {
+      startP++ ;
+      endP-- ;
+      if ( startP == endP ) {
+        break ;
       }
-      if ( bAdder > 0  and ( endP - startP < 30 ) ) {
-        startP-- ;
-        endP++ ;
-      }
-      middle = endP - round( (endP - startP) / 2 ) ;
-
-      startP = constrain(startP, 0, NUM_LEDS - 1) ;
-      middle = constrain(middle, 0, NUM_LEDS - 1) ;
-      endP = constrain(endP, 0, NUM_LEDS - 1) ;
-
-      brightness += bAdder ;
-      brightness = constrain(brightness, 0, 255) ;
-      if ( brightness >= 250 ) {
-        bAdder = -5 ;
-        //        Serial.print(" bAdder: ") ;
-        //        Serial.print(bAdder) ;
-        //        brightness += bAdder ;
-      }
-
-      fill_solid(leds, NUM_LEDS, CRGB::Black);
-      fill_gradient(leds, startP, CHSV(hue, 255, 0), middle, CHSV(hue, 255, brightness), SHORTEST_HUES);
-      fill_gradient(leds, middle, CHSV(hue, 255, brightness), endP, CHSV(hue, 255, 0), SHORTEST_HUES);
-      FastLED.show();
-      FastLED.delay(25);
     }
+    if ( bAdder > 0  and ( endP - startP < 30 ) ) {
+      startP-- ;
+      endP++ ;
+    }
+    middle = endP - round( (endP - startP) / 2 ) ;
+
+    startP = constrain(startP, 0, NUM_LEDS - 1) ;
+    middle = constrain(middle, 0, NUM_LEDS - 1) ;
+    endP = constrain(endP, 0, NUM_LEDS - 1) ;
+
+    brightness += bAdder ;
+    brightness = constrain(brightness, 0, 255) ;
+    if ( brightness >= 250 ) {
+      bAdder = -5 ;
+      //        Serial.print(" bAdder: ") ;
+      //        Serial.print(bAdder) ;
+      //        brightness += bAdder ;
+    }
+
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    fill_gradient(leds, startP, CHSV(hue, 255, 0), middle, CHSV(hue, 255, brightness), SHORTEST_HUES);
+    fill_gradient(leds, middle, CHSV(hue, 255, brightness), endP, CHSV(hue, 255, 0), SHORTEST_HUES);
+    FastLED.show();
+    FastLED.delay(25);
   }
+  // }
 }
 
 void pulse_suck() {
   int middle ;
-  int startP ;
-  int endP ;
+  int startPixelPos ;
+  int endPixelPos ;
   uint8_t hue ;
   int brightness;
-  int bAdder ;
-  int lastEnd ;
-  // bool flowDir ;
+  int brightnessAdder ;
+  static int lastPixelEndPos ;
 
-  while ( ledMode == 10  ) {
-    fill_solid(leds, NUM_LEDS, CRGB::Black);
-    FastLED.delay(random16(200, 700)) ;
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  FastLED.delay(random16(200, 700)) ;
 
-    hue = random8(0, 60) ;
-    brightness = MIN_BRIGHT + 1 ;
-    bAdder = 10 ;
-    startP = lastEnd ;
-    endP = startP ;
+  hue = random8(0, 60) ;
+  brightness = MIN_BRIGHT + 1 ;
+  brightnessAdder = 10 ;
+  startPixelPos = lastPixelEndPos ;
+  endPixelPos = startPixelPos ;
 
-    while ( brightness > MIN_BRIGHT ) {
-      if ( bAdder < 0 and startP < endP ) {
-        startP += 2 ;
-        if ( startP == endP ) {
-          lastEnd = startP ;
-          if ( endP > 88 ) {
-            lastEnd = 0 ;
-          }
-          break ;
+  while ( brightness > MIN_BRIGHT ) {
+    if ( brightnessAdder < 0 and startPixelPos < endPixelPos ) {
+      startPixelPos += 2 ;
+      if ( startPixelPos == endPixelPos ) {
+        lastPixelEndPos = startPixelPos ;
+        if ( lastPixelEndPos > 70 ) {
+          lastPixelEndPos = 0 ;
         }
+        break ;
       }
-      if ( bAdder > 0  and ( endP - startP < 20 ) ) {
-        endP += 2 ;
-      }
-      middle = endP - round( (endP - startP) / 2 ) ;
-
-      startP = constrain(startP, 0, NUM_LEDS - 1) ;
-      middle = constrain(middle, 0, NUM_LEDS - 1) ;
-      endP = constrain(endP, 0, NUM_LEDS - 1) ;
-
-      brightness += bAdder ;
-      brightness = constrain(brightness, 0, 255) ;
-      if ( brightness >= 250 ) {
-        bAdder = -5 ;
-      }
-
-      fill_solid(leds, NUM_LEDS, CRGB::Black);
-      fill_gradient(leds, startP, CHSV(hue, 255, 0), middle, CHSV(hue, 255, brightness), SHORTEST_HUES);
-      fill_gradient(leds, middle, CHSV(hue, 255, brightness), endP, CHSV(hue, 255, 0), SHORTEST_HUES);
-      FastLED.show();
-      FastLED.delay(25);
     }
+    if ( brightnessAdder > 0  and ( endPixelPos - startPixelPos < 20 ) ) {
+      endPixelPos += 2 ;
+    }
+    middle = endPixelPos - round( (endPixelPos - startPixelPos) / 2 ) ;
+
+    startPixelPos = constrain(startPixelPos, 0, NUM_LEDS - 1) ;
+    middle = constrain(middle, 0, NUM_LEDS - 1) ;
+    endPixelPos = constrain(endPixelPos, 0, NUM_LEDS - 1) ;
+
+    brightness += brightnessAdder ;
+    brightness = constrain(brightness, 0, 255) ;
+    if ( brightness >= 250 ) {
+      brightnessAdder = -5 ;
+    }
+
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    fill_gradient(leds, startPixelPos, CHSV(hue, 255, 0), middle, CHSV(hue, 255, brightness), SHORTEST_HUES);
+    fill_gradient(leds, middle, CHSV(hue, 255, brightness), endPixelPos, CHSV(hue, 255, 0), SHORTEST_HUES);
+    FastLED.show();
+    FastLED.delay(25);
   }
 }
 
@@ -515,7 +495,7 @@ void Fire2012()
 
 // Have we completed the specified interval since last confirmed event?
 // "marker" chooses which counter to check
-boolean timeout(unsigned long *marker, unsigned long interval) {
+boolean timeout(unsigned long * marker, unsigned long interval) {
   if (millis() - *marker >= interval) {
     *marker += interval;    // move on ready for next interval
     return true;
@@ -525,7 +505,7 @@ boolean timeout(unsigned long *marker, unsigned long interval) {
 
 // Deal with a button read; true if button pressed and debounced is a new event
 // Uses reading of button input, debounce store, state store and debounce interval.
-boolean butndown(char button, unsigned long *marker, char *butnstate, unsigned long interval) {
+boolean butndown(char button, unsigned long * marker, char *butnstate, unsigned long interval) {
   switch (*butnstate) {               // Odd states if was pressed, >= 2 if debounce in progress
     case 0: // Button up so far,
       if (button == HIGH) return false; // Nothing happening!
