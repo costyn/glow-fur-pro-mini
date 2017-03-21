@@ -9,25 +9,23 @@
 #define BUTTON_PIN   3   // button is connected to pin 2 and GND
 
 #define COLOR_ORDER GRB  // Try mixing up the letters (RGB, GBR, BRG, etc) for a whole new world of color combinations
-#define FSPEED 15
+#define FSPEED 15        // Fire Speed
 #define FADER 242
 #define LOOPSTART 0
 
-#define CSPEED 25
+#define CSPEED 25   // Cylon Speed
 
 CRGB leds[NUM_LEDS];
 CRGBPalette16 currentPalette;
-
+CRGBPalette16 palettes[] = { RainbowColors_p, RainbowStripeColors_p, OceanColors_p, HeatColors_p, PartyColors_p, CloudColors_p, ForestColors_p } ;
 TBlendType    currentBlending;
+
 int ledMode = 0;
 int fadeSpeed = FADER ;
-int fadeAdder = 4 ;
+
 long loopCounter = LOOPSTART ;
 
 unsigned long lastButtonChange = 0; // button debounce timer.
-
-CRGBPalette16 palettes[] = { RainbowColors_p, RainbowStripeColors_p, OceanColors_p, HeatColors_p, PartyColors_p, CloudColors_p, ForestColors_p } ;
-
 byte currKeyState = LOW ;
 byte prevKeyState = HIGH;         // button is active low
 
@@ -42,7 +40,7 @@ void setup() {
   currentBlending = LINEARBLEND;
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), shortKeyPress, RISING);
-  //  pinMode(LED_BUILTIN, OUTPUT);
+
   Serial.begin(9600) ;
   Serial.print( "Starting up. Numroutines = ") ;
   Serial.println( NUMROUTINES ) ;
@@ -59,22 +57,22 @@ void loop() {
     FastLED.show();
     FastLED.delay(1000 / SPEED);
 
+    // FastLED Fire2012 split down the middle, so the fire flows "down" from the neck of the scarf to the ends
   } else if ( strcmp(routines[ledMode], "fire2012") == 0 ) {
     Fire2012() ;
     FastLED.show();
     FastLED.delay(1000 / FSPEED);
 
+    // Cylon / KITT / Larson scanner with fading tail and slowly changing color
   } else if ( strcmp(routines[ledMode], "cylon") == 0 ) {
-    fadeSpeed = FADER ;
     cylon() ;
     FastLED.show();
-    fadeall(fadeSpeed);
+    fadeall(242);
     delay(CSPEED);
 
     // Fade glitter
   } else if ( strcmp(routines[ledMode], "fglitter") == 0 ) {
-    fadeSpeed = 250 ;
-    fadeall(fadeSpeed);
+    fadeall(250);
     addGlitter(90);
     FastLED.show();
     FastLED.delay(2);
@@ -109,7 +107,7 @@ void loop() {
   } else if ( strcmp(routines[ledMode], "pulse2") == 0 ) {
     pulse2() ;
 
-    /* Caterpillar walk */
+    // Caterpillar walk
   } else if ( strcmp(routines[ledMode], "pulsesuck") == 0 ) {
     pulse_suck() ;
   }
@@ -124,7 +122,7 @@ void FillLEDsFromPaletteColors( uint8_t colorIndex) {
   addGlitter(80);
 }
 
-
+// interrupt triggered button press with a very simple debounce (discard multiple button presses < 500ms)
 void shortKeyPress() {
   if ( millis() - lastButtonChange > 500 ) {
     ledMode++;
@@ -136,9 +134,11 @@ void shortKeyPress() {
     if (ledMode >= NUMROUTINES ) {
       ledMode = 0;
     }
+
     lastButtonChange = millis() ;
   } else {
-    Serial.println( "Too short an interval" ) ;
+    // Debugging output
+    // Serial.println( "Too short an interval" ) ;
   }
 }
 
@@ -149,7 +149,7 @@ void addGlitter( fract8 chanceOfGlitter)
   }
 }
 
-void addRGlitter( fract8 chanceOfGlitter)
+void addColorGlitter( fract8 chanceOfGlitter)
 {
   if ( random8() < chanceOfGlitter) {
     leds[ random16(NUM_LEDS) ] = CHSV( random8(), 255, 255);
@@ -183,8 +183,6 @@ void cylon() {
 
 }
 
-#define MAX_BRIGHT 255
-#define MIN_BRIGHT 10
 
 
 void fadeall(uint8_t fSpeed) {
@@ -200,45 +198,35 @@ void brightall(uint8_t fSpeed) {
 }
 
 
-void pulse(uint8_t startP, uint8_t endP, uint8_t hue ) {
-  uint8_t middle = endP - round( (endP - startP) / 2 ) ;
+void pulse(uint8_t startPixelPos, uint8_t endPixelPos, uint8_t hue ) {
+  uint8_t middlePixelPos = endPixelPos - round( (endPixelPos - startPixelPos) / 2 ) ;
 
   static int brightness = 0;
-  static int bAdder = 15;
-  static int bStartNew = random8(1, 30) ;
+  static int brightAdder = 15;
+  static int brightStartNew = random8(1, 30) ;
 
-  startP = constrain(startP, 0, NUM_LEDS - 1) ;
-  middle = constrain(middle, 0, NUM_LEDS - 1) ;
-  endP = constrain(endP, 0, NUM_LEDS - 1) ;
+  // Writing outside the array gives weird effects
+  startPixelPos  = constrain(startPixelPos, 0, NUM_LEDS - 1) ;
+  middlePixelPos = constrain(middlePixelPos, 0, NUM_LEDS - 1) ;
+  endPixelPos    = constrain(endPixelPos, 0, NUM_LEDS - 1) ;
 
-  brightness += bAdder ;
+  brightness += brightAdder ;
   if ( brightness >= 250 ) {
-    bAdder = random8(5, 15) * -1 ;
-    brightness += bAdder ;
+    brightAdder = random8(5, 15) * -1 ;
+    brightness += brightAdder ;
   }
   if ( brightness <= 0 ) {
-    bAdder = 0 ;
+    brightAdder = 0 ;
     brightness = 0 ;
-    if ( startP == bStartNew ) {
-      bAdder = 15;
-      bStartNew = random8(1, 70) ;
+    if ( startPixelPos == brightStartNew ) {
+      brightAdder = 15;
+      brightStartNew = random8(1, 70) ;
     }
   }
-  /*
-
-    Serial.print(" start: ") ;
-    Serial.print(startP) ;
-    Serial.print(" middle: ") ;
-    Serial.print(middle) ;
-    Serial.print(" end: ") ;
-    Serial.print(endP) ;
-    Serial.print(" bright: ") ;
-    Serial.println(brightness) ;
-  */
 
   fill_solid(leds, NUM_LEDS, CRGB::Black);
-  fill_gradient(leds, startP, CHSV(hue, 255, 0), middle, CHSV(hue, 255, brightness), SHORTEST_HUES);
-  fill_gradient(leds, middle, CHSV(hue, 255, brightness), endP, CHSV(hue, 255, 0), SHORTEST_HUES);
+  fill_gradient(leds, startPixelPos, CHSV(hue, 255, 0), middlePixelPos, CHSV(hue, 255, brightness), SHORTEST_HUES);
+  fill_gradient(leds, middlePixelPos, CHSV(hue, 255, brightness), endPixelPos, CHSV(hue, 255, 0), SHORTEST_HUES);
 }
 
 
@@ -292,18 +280,6 @@ void pulse2() {
       //        Serial.print(bAdder) ;
       //        brightness += bAdder ;
     }
-    /*
-                Serial.print(" start: ") ;
-                Serial.print(startP) ;
-                Serial.print(" middle: ") ;
-                Serial.print(middle) ;
-                Serial.print(" end: ") ;
-                Serial.print(endP) ;
-                Serial.print(" bright: ") ;
-                Serial.print(brightness) ;
-                Serial.print(" hue: ") ;
-                Serial.println(hue) ;
-    */
 
     fill_solid(leds, NUM_LEDS, CRGB::Black);
     fill_gradient(leds, startP, CHSV(hue, 255, 0), middle, CHSV(hue, 255, brightness), SHORTEST_HUES);
@@ -312,6 +288,8 @@ void pulse2() {
     FastLED.delay(25);
   }
 }
+
+#define MIN_BRIGHT 10
 
 void pulse_static() {
   int middle ;
@@ -421,30 +399,10 @@ void pulse_suck() {
   }
 }
 
-void glowPulse() {
-  static int bdirection = 1 ;
-  /*
-    if ( leds[0].val < MIN_BRIGHT ) {
-      fill_solid(leds, NUM_LEDS, CHSV( random8(), 255, MIN_BRIGHT));
-      bdirection *= -1 ;
-    }
-
-    if ( leds[0].val == MAX_BRIGHT ) {
-      bdirection *= -1 ;
-    }
-
-    if ( bdirection < 0 ) {
-      brightenAll( FADER ) ;
-    } else {
-      fadeAll( FADER ) ;
-    }
-  */
-}
-
 
 #define COOLING  55
 #define SPARKING 120
-#define FIRELEDS 45
+#define FIRELEDS round( NUM_LEDS / 2 ) 
 
 void Fire2012()
 {
@@ -489,72 +447,3 @@ void Fire2012()
   }
 
 }
-
-
-
-
-// Have we completed the specified interval since last confirmed event?
-// "marker" chooses which counter to check
-boolean timeout(unsigned long * marker, unsigned long interval) {
-  if (millis() - *marker >= interval) {
-    *marker += interval;    // move on ready for next interval
-    return true;
-  }
-  else return false;
-}
-
-// Deal with a button read; true if button pressed and debounced is a new event
-// Uses reading of button input, debounce store, state store and debounce interval.
-boolean butndown(char button, unsigned long * marker, char *butnstate, unsigned long interval) {
-  switch (*butnstate) {               // Odd states if was pressed, >= 2 if debounce in progress
-    case 0: // Button up so far,
-      if (button == HIGH) return false; // Nothing happening!
-      else {
-        *butnstate = 2;                 // record that is now pressed
-        *marker = millis();             // note when was pressed
-        return false;                   // and move on
-      }
-
-    case 1: // Button down so far,
-      if (button == LOW) return false; // Nothing happening!
-      else {
-        *butnstate = 3;                 // record that is now released
-        *marker = millis();             // note when was released
-        return false;                   // and move on
-      }
-
-    case 2: // Button was up, now down.
-      if (button == HIGH) {
-        *butnstate = 0;                 // no, not debounced; revert the state
-        return false;                   // False alarm!
-      }
-      else {
-        if (millis() - *marker >= interval) {
-          *butnstate = 1;               // jackpot!  update the state
-          return true;                  // because we have the desired event!
-        }
-        else
-          return false;                 // not done yet; just move on
-      }
-
-    case 3: // Button was down, now up.
-      if (button == LOW) {
-        *butnstate = 1;                 // no, not debounced; revert the state
-        return false;                   // False alarm!
-      }
-      else {
-        if (millis() - *marker >= interval) {
-          *butnstate = 0;               // Debounced; update the state
-          return false;                 // but it is not the event we want
-        }
-        else
-          return false;                 // not done yet; just move on
-      }
-    default:                            // Error; recover anyway
-      {
-        *butnstate = 0;
-        return false;                   // Definitely false!
-      }
-  }
-}
-
