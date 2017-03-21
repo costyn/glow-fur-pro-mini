@@ -1,19 +1,28 @@
+/* 
+ * Heavily modified from https://learn.adafruit.com/animated-neopixel-gemma-glow-fur-scarf
+ * 
+ * This code will not work on a Gemma, it's too big. It will work on any Atmel with at least 16K memory.
+ *  
+ * Blame: Costyn van Dongen
+ * 
+ */
+
+
 #include <FastLED.h>
 
-#define LED_PIN     12   // which pin your pixels are connected to
+#define LED_PIN     12   // which pin your Neopixels are connected to
 #define NUM_LEDS    89   // how many LEDs you have
 #define BRIGHTNESS 255  // 0-255, higher number is brighter. 
 #define SATURATION 255   // 0-255, 0 is pure white, 255 is fully saturated color
-#define SPEED       80   // How fast the colors move.  Higher numbers = faster motion
+#define PALETTE_SPEED  80   // How fast the palette colors move.  Higher numbers = faster motion
 #define STEPS        3   // How wide the bands of color are.  1 = more like a gradient, 10 = more like stripes
 #define BUTTON_PIN   3   // button is connected to pin 2 and GND
 
 #define COLOR_ORDER GRB  // Try mixing up the letters (RGB, GBR, BRG, etc) for a whole new world of color combinations
-#define FSPEED 15        // Fire Speed
-#define FADER 242
+#define FIRE_SPEED  15        // Fire Speed
 #define LOOPSTART 0
 
-#define CSPEED 25   // Cylon Speed
+#define CYLON_SPEED 25   // Cylon Speed
 
 CRGB leds[NUM_LEDS];
 CRGBPalette16 currentPalette;
@@ -21,7 +30,6 @@ CRGBPalette16 palettes[] = { RainbowColors_p, RainbowStripeColors_p, OceanColors
 TBlendType    currentBlending;
 
 int ledMode = 0;
-int fadeSpeed = FADER ;
 
 long loopCounter = LOOPSTART ;
 
@@ -29,7 +37,7 @@ unsigned long lastButtonChange = 0; // button debounce timer.
 byte currKeyState = LOW ;
 byte prevKeyState = HIGH;         // button is active low
 
-char *routines[] = { "rb", "rb_stripe", "ocean", "heat", "party", "cloud", "forest", "fire2012", "cylon", "fglitter", "dglitter", "pulse", "pulsestatic", "pulse2", "pulsesuck", "black" };
+char *routines[] = { "rb", "rb_stripe", "ocean", "heat", "party", "cloud", "forest", "fire2012", "cylon", "fglitter", "dglitter", "strobe", "pulse", "pulsestatic", "pulse2", "pulsesuck", "black" };
 
 #define NUMROUTINES (sizeof(routines)/sizeof(char *)) //array size  
 
@@ -44,31 +52,30 @@ void setup() {
   Serial.begin(9600) ;
   Serial.print( "Starting up. Numroutines = ") ;
   Serial.println( NUMROUTINES ) ;
-  lastButtonChange = millis() ;
 }
 
 void loop() {
-  static uint8_t startIndex = 0;
-  startIndex = startIndex + 1; /* motion speed */
+  static uint8_t startIndex = 0;  // initialize at start 
+  startIndex = startIndex + 1; 
 
   if ( ledMode >= 0 and ledMode <= 6 ) {
     currentPalette = palettes[ledMode] ;
     FillLEDsFromPaletteColors( startIndex);
     FastLED.show();
-    FastLED.delay(1000 / SPEED);
+    FastLED.delay(1000 / PALETTE_SPEED );
 
     // FastLED Fire2012 split down the middle, so the fire flows "down" from the neck of the scarf to the ends
   } else if ( strcmp(routines[ledMode], "fire2012") == 0 ) {
     Fire2012() ;
     FastLED.show();
-    FastLED.delay(1000 / FSPEED);
+    FastLED.delay(1000 / FIRE_SPEED );
 
     // Cylon / KITT / Larson scanner with fading tail and slowly changing color
   } else if ( strcmp(routines[ledMode], "cylon") == 0 ) {
     cylon() ;
     FastLED.show();
     fadeall(242);
-    delay(CSPEED);
+    delay( CYLON_SPEED );
 
     // Fade glitter
   } else if ( strcmp(routines[ledMode], "fglitter") == 0 ) {
@@ -83,6 +90,20 @@ void loop() {
     addGlitter(90);
     FastLED.show();
     FastLED.delay(20);
+
+    // With thanks to Hans for the strobe idea https://www.tweaking4all.nl/hardware/arduino/adruino-led-strip-effecten/#strobe
+  } else if ( strcmp(routines[ledMode], "strobe") == 0 ) {
+    fill_solid(leds, NUM_LEDS, CRGB::White);
+    FastLED.show();
+    FastLED.delay(50);
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    FastLED.show();
+    FastLED.delay(50);
+
+    // Abuse the palette startIndex counter to pause 1 second every 10 flashes.
+    if( (startIndex % 10) == 0 ) {
+          FastLED.delay(1000);
+    }
 
     // Black - off
   } else if ( strcmp(routines[ledMode], "black") == 0 ) {
@@ -114,14 +135,6 @@ void loop() {
 
 }
 
-void FillLEDsFromPaletteColors( uint8_t colorIndex) {
-  for ( int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = ColorFromPalette( currentPalette, colorIndex, BRIGHTNESS, currentBlending);
-    colorIndex += STEPS;
-  }
-  addGlitter(80);
-}
-
 // interrupt triggered button press with a very simple debounce (discard multiple button presses < 500ms)
 void shortKeyPress() {
   if ( millis() - lastButtonChange > 500 ) {
@@ -142,6 +155,14 @@ void shortKeyPress() {
   }
 }
 
+void FillLEDsFromPaletteColors( uint8_t colorIndex) {
+  for ( int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = ColorFromPalette( currentPalette, colorIndex, BRIGHTNESS, currentBlending);
+    colorIndex += STEPS;
+  }
+  addGlitter(80);
+}
+
 void addGlitter( fract8 chanceOfGlitter)
 {
   if ( random8() < chanceOfGlitter) {
@@ -149,6 +170,7 @@ void addGlitter( fract8 chanceOfGlitter)
   }
 }
 
+// Not used anywhere, but feel free to replace addGlitter with addColorGlitter in FillLEDsFromPaletteColors() above
 void addColorGlitter( fract8 chanceOfGlitter)
 {
   if ( random8() < chanceOfGlitter) {
@@ -184,16 +206,15 @@ void cylon() {
 }
 
 
-
-void fadeall(uint8_t fSpeed) {
+void fadeall(uint8_t fade_all_speed) {
   for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i].nscale8(fSpeed);
+    leds[i].nscale8(fade_all_speed);
   }
 }
 
-void brightall(uint8_t fSpeed) {
+void brightall(uint8_t bright_all_speed) {
   for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] += leds[i].scale8(fSpeed) ;
+    leds[i] += leds[i].scale8(bright_all_speed) ;
   }
 }
 
@@ -404,6 +425,10 @@ void pulse_suck() {
 #define SPARKING 120
 #define FIRELEDS round( NUM_LEDS / 2 ) 
 
+// Adapted Fire2012. This version starts in the middle and mirrors the fire going down to both ends.
+// Works well with the Adafruit glow fur scarf.
+// FIRELEDS defines the position of the middle LED.
+
 void Fire2012()
 {
   // Array of temperature readings at each simulation cell
@@ -432,7 +457,7 @@ void Fire2012()
     leds[j] = color;
   }
 
-  /*     Mapping needed:
+  /*  "Reverse" Mapping needed:
       ledindex 44 = heat[0]
       ledindex 43 = heat[1]
       ledindex 42 = heat[2]
