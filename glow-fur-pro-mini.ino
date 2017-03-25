@@ -1,11 +1,15 @@
-/* 
- * Heavily modified from https://learn.adafruit.com/animated-neopixel-gemma-glow-fur-scarf
- * 
- * This code will not work on a Gemma, it's too big. It will work on any Atmel with at least 16K memory.
- *  
- * Blame: Costyn van Dongen
- * 
- */
+/*
+   Heavily modified from https://learn.adafruit.com/animated-neopixel-gemma-glow-fur-scarf
+
+   This code will not work on a Gemma, it's too big. It will work on any Atmel with at least 16K memory.
+
+   Blame: Costyn van Dongen
+
+   Future ideas:
+   - choose 1 color, brightenall to max, then fade to min
+   - heartbeat pulse
+   
+*/
 
 
 #include <FastLED.h>
@@ -14,31 +18,30 @@
 #define NUM_LEDS    89   // how many LEDs you have
 #define BRIGHTNESS 255  // 0-255, higher number is brighter. 
 #define SATURATION 255   // 0-255, 0 is pure white, 255 is fully saturated color
-#define PALETTE_SPEED  80   // How fast the palette colors move.  Higher numbers = faster motion
-#define STEPS        3   // How wide the bands of color are.  1 = more like a gradient, 10 = more like stripes
-#define BUTTON_PIN   3   // button is connected to pin 2 and GND
+#define PALETTE_SPEED  30   // How fast the palette colors move.  Higher numbers = faster motion
+#define STEPS        2   // How wide the bands of color are.  1 = more like a gradient, 10 = more like stripes
+#define BUTTON_PIN   2   // button is connected to pin 2 and GND
 
 #define COLOR_ORDER GRB  // Try mixing up the letters (RGB, GBR, BRG, etc) for a whole new world of color combinations
-#define FIRE_SPEED  15        // Fire Speed
+#define FIRE_SPEED  15   // Fire Speed; delay in millseconds. Higher delay = slower movement.
 #define LOOPSTART 0
 
-#define CYLON_SPEED 25   // Cylon Speed
+#define CYLON_SPEED 25  // Cylon Speed; delay in millseconds. Higher delay = slower movement.
 
 CRGB leds[NUM_LEDS];
 CRGBPalette16 currentPalette;
 CRGBPalette16 palettes[] = { RainbowColors_p, RainbowStripeColors_p, OceanColors_p, HeatColors_p, PartyColors_p, CloudColors_p, ForestColors_p } ;
 TBlendType    currentBlending;
 
-int ledMode = 0;
+int ledMode = 10 ; // Which mode do we start with
 
-long loopCounter = LOOPSTART ;
+long loopCounter = LOOPSTART ;  // loopCounter. (mis)used in some modes
 
 unsigned long lastButtonChange = 0; // button debounce timer.
 byte currKeyState = LOW ;
 byte prevKeyState = HIGH;         // button is active low
 
-char *routines[] = { "rb", "rb_stripe", "ocean", "heat", "party", "cloud", "forest", "fire2012", "cylon", "fglitter", "dglitter", "strobe", "pulse", "pulsestatic", "pulse2", "pulsesuck", "black" };
-
+char *routines[] = { "rb", "rb_stripe", "ocean", "heat", "party", "cloud", "forest", "fire2012", "cylon", "fglitter", "dglitter", "strobe", "pulse", "pulsestatic", "pulse2", "pulsesuck", "racers", "black" };
 #define NUMROUTINES (sizeof(routines)/sizeof(char *)) //array size  
 
 void setup() {
@@ -55,8 +58,9 @@ void setup() {
 }
 
 void loop() {
-  static uint8_t startIndex = 0;  // initialize at start 
-  startIndex = startIndex + 1; 
+  static uint8_t startIndex = 0;  // initialize at start
+  startIndex = startIndex + 1;
+  static uint8_t strobeCount = 10 ;
 
   if ( ledMode >= 0 and ledMode <= 6 ) {
     currentPalette = palettes[ledMode] ;
@@ -74,7 +78,7 @@ void loop() {
   } else if ( strcmp(routines[ledMode], "cylon") == 0 ) {
     cylon() ;
     FastLED.show();
-    fadeall(242);
+    fadeall(240);
     delay( CYLON_SPEED );
 
     // Fade glitter
@@ -93,16 +97,18 @@ void loop() {
 
     // With thanks to Hans for the strobe idea https://www.tweaking4all.nl/hardware/arduino/adruino-led-strip-effecten/#strobe
   } else if ( strcmp(routines[ledMode], "strobe") == 0 ) {
-    fill_solid(leds, NUM_LEDS, CRGB::White);
+    fill_solid(leds, NUM_LEDS, CRGB::White);  // Pretty awful
+    //    fill_solid(leds, NUM_LEDS, CHSV( random8(), 255, 255));  // A lot worse. Just terrible!
     FastLED.show();
-    FastLED.delay(50);
+    FastLED.delay(40);
     fill_solid(leds, NUM_LEDS, CRGB::Black);
     FastLED.show();
-    FastLED.delay(50);
+    FastLED.delay(40);
 
-    // Abuse the palette startIndex counter to pause 1 second every 10 flashes.
-    if( (startIndex % 10) == 0 ) {
-          FastLED.delay(1000);
+    // Abuse the palette startIndex counter to pause 1 - 3.5 seconds every strobeCount flashes.
+    if ( (startIndex % strobeCount) == 0 ) {
+      FastLED.delay(random16(1000, 3500));
+      strobeCount = random8(2, 10) ;
     }
 
     // Black - off
@@ -131,6 +137,12 @@ void loop() {
     // Caterpillar walk
   } else if ( strcmp(routines[ledMode], "pulsesuck") == 0 ) {
     pulse_suck() ;
+
+  } else if ( strcmp(routines[ledMode], "racers") == 0 ) {
+    racingLeds() ;
+    loopCounter++ ;
+    FastLED.show();
+    FastLED.delay(15);
   }
 
 }
@@ -190,7 +202,8 @@ void cylon() {
 
   leds[ledPos] = CHSV(hue, 255, 255);
 
-  if ( ledPos % 3 == 0 ) {
+  // If current LED position is divisible by 5, increase hue by 1
+  if ( ledPos % 5 == 0 ) {
     hue += hueAdder ;
   }
   if ( hue > ENDHUE or hue == STARTHUE ) {
@@ -258,20 +271,20 @@ void pulse2() {
   uint8_t hue ;
   int brightness;
   int bAdder ;
-  bool flowDir ;
+  static bool flowDir = 1; // remember flowDir between calls to pulse2
 
   fill_solid(leds, NUM_LEDS, CRGB::Black);
-  FastLED.delay(random16(200, 2000)) ;
+  FastLED.delay(random16(100, 1000)) ;
 
   hue = random8(0, 60) ;
   brightness = 1 ;
   bAdder = 15 ;
-  flowDir = random8(2) ;
+  flowDir = ! flowDir ; // flip it!
 
   if ( flowDir ) {
-    endP = random8(20, 89);
+    endP = random8(30, 70);
   } else {
-    startP = random8(1, 70);
+    startP = random8(30, 70);
   }
 
   while ( brightness > 0 ) {
@@ -423,7 +436,7 @@ void pulse_suck() {
 
 #define COOLING  55
 #define SPARKING 120
-#define FIRELEDS round( NUM_LEDS / 2 ) 
+#define FIRELEDS round( NUM_LEDS / 2 )
 
 // Adapted Fire2012. This version starts in the middle and mirrors the fire going down to both ends.
 // Works well with the Adafruit glow fur scarf.
@@ -472,3 +485,58 @@ void Fire2012()
   }
 
 }
+
+void racingLeds() {
+  // Current position of racer
+  static byte racer1 = 0;
+  static byte racer2 = 0;
+  static byte racer3 = 0;
+
+  // "speed"; higher is slower.
+  int racer1speed = random8(1, 4) ;
+  int racer2speed = random8(1, 4) ;
+  int racer3speed = random8(1, 4) ;
+
+  // Direction of racer
+  static int racer1dir = 1 ;
+  static int racer2dir = 1 ;
+  static int racer3dir = 1 ;
+
+  // Start with black slate
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+
+  // Assign some colors
+  leds[racer1] = CRGB::Red;
+  leds[racer2] = CRGB::Blue;
+  leds[racer3] = CRGB::White;
+
+  // If the global variable "loopcounter" is evenly divisible by 'speed' then check if we've reached the end, and add a step
+  if ( loopCounter % racer1speed == 0 ) {
+    if ( (racer1 + racer1dir >= NUM_LEDS) or (racer1 + racer1dir <= 0) ) {
+      racer1dir *= -1 ;
+    }
+    racer1 += racer1dir ;
+  }
+
+  if ( loopCounter % racer2speed == 0 ) {
+    if ( ( racer2 + racer2dir >= NUM_LEDS) or (racer2 + racer2dir <= 0) ) {
+      racer2dir *= -1 ;
+    }
+    racer2 += racer2dir ;
+  }
+
+  if ( loopCounter % racer3speed == 0 ) {
+    if ( ( racer3 + racer3dir >= NUM_LEDS) or (racer3 + racer3dir <= 0) ) {
+      racer3dir *= -1 ;
+    }
+    racer3 += racer3dir ;
+  }
+
+  if ( loopCounter % 40 ) {
+    racer1speed = random8(2, 4) ;
+    racer2speed = random8(2, 4) ;
+    racer3speed = random8(2, 4) ;
+  }
+
+}
+
