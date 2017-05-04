@@ -8,7 +8,7 @@
    Future ideas:
    - choose 1 color, brightenall to max, then fade to min
    - heartbeat pulse
-   
+   - color rain https://www.youtube.com/watch?v=nHBImYTDZ9I
 */
 
 
@@ -20,7 +20,7 @@
 #define SATURATION 255   // 0-255, 0 is pure white, 255 is fully saturated color
 #define PALETTE_SPEED  30   // How fast the palette colors move.  Higher numbers = faster motion
 #define STEPS        2   // How wide the bands of color are.  1 = more like a gradient, 10 = more like stripes
-#define BUTTON_PIN   2   // button is connected to pin 2 and GND
+#define BUTTON_PIN   3   // button is connected to pin 2 and GND
 
 #define COLOR_ORDER GRB  // Try mixing up the letters (RGB, GBR, BRG, etc) for a whole new world of color combinations
 #define FIRE_SPEED  15   // Fire Speed; delay in millseconds. Higher delay = slower movement.
@@ -33,7 +33,7 @@ CRGBPalette16 currentPalette;
 CRGBPalette16 palettes[] = { RainbowColors_p, RainbowStripeColors_p, OceanColors_p, HeatColors_p, PartyColors_p, CloudColors_p, ForestColors_p } ;
 TBlendType    currentBlending;
 
-int ledMode = 10 ; // Which mode do we start with
+int ledMode = 8 ; // Which mode do we start with
 
 long loopCounter = LOOPSTART ;  // loopCounter. (mis)used in some modes
 
@@ -41,7 +41,7 @@ unsigned long lastButtonChange = 0; // button debounce timer.
 byte currKeyState = LOW ;
 byte prevKeyState = HIGH;         // button is active low
 
-char *routines[] = { "rb", "rb_stripe", "ocean", "heat", "party", "cloud", "forest", "fire2012", "cylon", "fglitter", "dglitter", "strobe", "pulse", "pulsestatic", "pulse2", "pulsesuck", "racers", "black" };
+char *routines[] = { "rb", "rb_stripe", "ocean", "heat", "party", "cloud", "forest", "fire2012", "cylon", "cylonmulti", "fglitter", "dglitter", "strobe", "pulse", "pulsestatic", "pulse2", "pulsesuck", "racers", "black" };
 #define NUMROUTINES (sizeof(routines)/sizeof(char *)) //array size  
 
 void setup() {
@@ -79,6 +79,13 @@ void loop() {
     cylon() ;
     FastLED.show();
     fadeall(240);
+    delay( CYLON_SPEED );
+
+    // Cylon / KITT / Larson scanner with fading tail and slowly changing color
+  } else if ( strcmp(routines[ledMode], "cylonmulti") == 0 ) {
+    cylonMulti() ;
+    FastLED.show();
+    fadeall(200);
     delay( CYLON_SPEED );
 
     // Fade glitter
@@ -142,7 +149,7 @@ void loop() {
     racingLeds() ;
     loopCounter++ ;
     FastLED.show();
-    FastLED.delay(15);
+    FastLED.delay(5);
   }
 
 }
@@ -216,6 +223,19 @@ void cylon() {
     ledPos += ledPosAdder ;
   }
 
+}
+
+void cylonMulti() {
+  static uint8_t ledPos[] = {0, 25, 50, 75}; // Starting position
+  static int ledAdd[] = {1, 1, 1, 1}; // Starting direction
+
+  for (int i = 0; i < 4; i++) {
+    leds[ledPos[i]] = CHSV(40 * i, 255, 255);
+    if ( (ledPos[i] + ledAdd[i] == 0) or (ledPos[i] + ledAdd[i] == NUM_LEDS) ) {
+      ledAdd[i] *= -1 ;
+    }
+    ledPos[i] += ledAdd[i] ;
+  }
 }
 
 
@@ -487,56 +507,29 @@ void Fire2012()
 }
 
 void racingLeds() {
-  // Current position of racer
-  static byte racer1 = 0;
-  static byte racer2 = 0;
-  static byte racer3 = 0;
+  static uint8_t racer[] = {0, 1, 2}; // Starting positions
+  static int racerDir[] = {1, 1, 1}; // Current direction
+  static int racerSpeed[] = { random8(1, 4), random8(1, 4) , random8(1, 4) }; // Starting speed
+  CRGB racerColor[] = { CRGB::Red, CRGB::Blue, CRGB::White }; // Racer colors
 
-  // "speed"; higher is slower.
-  int racer1speed = random8(1, 4) ;
-  int racer2speed = random8(1, 4) ;
-  int racer3speed = random8(1, 4) ;
+#define NUMRACERS sizeof(racer) //array size  
 
-  // Direction of racer
-  static int racer1dir = 1 ;
-  static int racer2dir = 1 ;
-  static int racer3dir = 1 ;
+  fill_solid(leds, NUM_LEDS, CRGB::Black);    // Start with black slate
 
-  // Start with black slate
-  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  for ( int i = 0; i < NUMRACERS ; i++ ) {
+    leds[racer[i]] = racerColor[i]; // Assign color
 
-  // Assign some colors
-  leds[racer1] = CRGB::Red;
-  leds[racer2] = CRGB::Blue;
-  leds[racer3] = CRGB::White;
-
-  // If the global variable "loopcounter" is evenly divisible by 'speed' then check if we've reached the end, and add a step
-  if ( loopCounter % racer1speed == 0 ) {
-    if ( (racer1 + racer1dir >= NUM_LEDS) or (racer1 + racer1dir <= 0) ) {
-      racer1dir *= -1 ;
+    // If the global variable "loopcounter" is evenly divisible by 'speed' then check if we've reached the end (if so, reverse), and do a step
+    if ( loopCounter % racerSpeed[i] == 0 ) {
+      if ( (racer[i] + racerDir[i] >= NUM_LEDS) or (racer[i] + racerDir[i] <= 0) ) {
+        racerDir[i] *= -1 ;
+      }
+      racer[i] += racerDir[i] ;
     }
-    racer1 += racer1dir ;
-  }
 
-  if ( loopCounter % racer2speed == 0 ) {
-    if ( ( racer2 + racer2dir >= NUM_LEDS) or (racer2 + racer2dir <= 0) ) {
-      racer2dir *= -1 ;
+    if ( loopCounter % 40 ) {
+      racerSpeed[i] = random8(2, 4) ;  // Randomly speed up or slow down
     }
-    racer2 += racer2dir ;
   }
-
-  if ( loopCounter % racer3speed == 0 ) {
-    if ( ( racer3 + racer3dir >= NUM_LEDS) or (racer3 + racer3dir <= 0) ) {
-      racer3dir *= -1 ;
-    }
-    racer3 += racer3dir ;
-  }
-
-  if ( loopCounter % 40 ) {
-    racer1speed = random8(2, 4) ;
-    racer2speed = random8(2, 4) ;
-    racer3speed = random8(2, 4) ;
-  }
-
 }
 
